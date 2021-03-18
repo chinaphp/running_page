@@ -8,19 +8,18 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 
 import polyline
-import pytz
 import gpxpy
 import requests
 
 from config import (
+    start_point,
+    run_map,
     GPX_FOLDER,
     JSON_FILE,
     SQL_FILE,
 )
 from generator import Generator
-
-start_point = namedtuple("start_point", "lat lon")
-run_map = namedtuple("polyline", "summary_polyline")
+from utils import adjust_time
 
 # need to test
 LOGIN_API = "https://api.gotokeep.com/v1.1/users/login"
@@ -48,7 +47,8 @@ def get_to_download_runs_ids(session, headers):
         r = session.get(RUN_DATA_API.format(last_date=last_date), headers=headers)
         if r.ok:
             run_logs = r.json()["data"]["records"]
-            result.extend([i["logs"][0]["stats"]["id"] for i in run_logs])
+            for i in run_logs:
+                result.extend(j["stats"]["id"] for j in i["logs"])
             last_date = r.json()["data"]["lastTimestamp"]
             since_time = datetime.utcfromtimestamp(last_date / 1000)
             print(f"pares keep ids data since {since_time}")
@@ -68,11 +68,6 @@ def decode_runmap_data(text):
     run_points_data = zlib.decompress(base64.b64decode(text), 16 + zlib.MAX_WBITS)
     run_points_data = json.loads(run_points_data)
     return run_points_data
-
-
-def adjust_time(time, tz_name):
-    tc_offset = datetime.now(pytz.timezone(tz_name)).utcoffset()
-    return time + tc_offset
 
 
 def parse_raw_data_to_nametuple(run_data, old_gpx_ids, with_download_gpx=False):
